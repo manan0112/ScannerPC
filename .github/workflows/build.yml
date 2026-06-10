@@ -130,7 +130,7 @@ jobs:
               errors.append("_meta.total_elapsed_seconds is 0 or missing")
 
           # ── Report ───────────────────────────────────────────
-          print("\n── Validation summary ──────────────────────────")
+          print("\n-- Validation summary --------------------------")
           if errors:
               for e in errors:
                   print(f"  FAIL: {e}")
