@@ -28,11 +28,8 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Trim unused heavy stdlib modules to keep the exe small.
-        'tkinter', 'unittest', 'email', 'html', 'http',
-        'urllib', 'xml', 'xmlrpc', 'pydoc', 'doctest',
-        'difflib', 'ftplib', 'imaplib', 'poplib', 'smtplib',
-        'telnetlib', 'turtle', 'turtledemo', 'idlelib',
+        # Only exclude modules that are safe to drop (no bootloader dependency).
+        'tkinter', 'turtle', 'turtledemo', 'idlelib',
         'antigravity', 'this',
     ],
     win_no_prefer_redirects=False,
