@@ -1,23 +1,26 @@
-name: Build scanner.exe
+name: Build & Validate scanner.exe
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:   # also allows manual trigger from the Actions tab
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-and-validate:
     runs-on: windows-latest
 
     steps:
+      # ── 1. Checkout ──────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ── 2. Python setup ──────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      # ── 3. Build ─────────────────────────────────────────────
       - name: Install PyInstaller
         run: pip install pyinstaller
 
@@ -27,9 +30,135 @@ jobs:
       - name: Build exe
         run: pyinstaller scanner.spec --noconfirm --clean
 
-      - name: Upload artifact
+      - name: Confirm exe exists
+        run: |
+          if (!(Test-Path "dist\scanner.exe")) {
+            Write-Error "scanner.exe not found after build"
+            exit 1
+          }
+          $size = (Get-Item "dist\scanner.exe").length / 1MB
+          Write-Host "scanner.exe size: $([math]::Round($size,1)) MB"
+
+      # ── 4. Run ───────────────────────────────────────────────
+      - name: Run scanner.exe
+        working-directory: dist
+        run: |
+          .\scanner.exe --output scan_report.json
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "scanner.exe exited with code $LASTEXITCODE"
+            exit 1
+          }
+
+      # ── 5. Validate JSON structure ───────────────────────────
+      - name: Validate JSON output
+        working-directory: dist
+        shell: python
+        run: |
+          import json, sys, os
+
+          path = "scan_report.json"
+          if not os.path.exists(path):
+              print("FAIL: scan_report.json not found")
+              sys.exit(1)
+
+          with open(path, encoding="utf-8") as f:
+              data = json.load(f)
+
+          errors = []
+
+          # ── Top-level keys must exist ────────────────────────
+          required_keys = ["system_info", "software", "folders", "large_files", "_meta"]
+          for key in required_keys:
+              if key not in data:
+                  errors.append(f"Missing top-level key: '{key}'")
+
+          # ── system_info checks ───────────────────────────────
+          si = data.get("system_info", {})
+          for field in ["hostname", "os", "cpu", "memory", "disks", "uptime_seconds"]:
+              if field not in si:
+                  errors.append(f"system_info missing field: '{field}'")
+          if si.get("hostname", "") == "":
+              errors.append("system_info.hostname is empty")
+          if not isinstance(si.get("disks"), list) or len(si.get("disks", [])) == 0:
+              errors.append("system_info.disks is empty or not a list")
+          mem = si.get("memory", {})
+          if mem.get("total_bytes", 0) == 0:
+              errors.append("system_info.memory.total_bytes is 0")
+
+          # ── software checks ──────────────────────────────────
+          sw = data.get("software", [])
+          if not isinstance(sw, list):
+              errors.append("software is not a list")
+          elif len(sw) == 0:
+              errors.append("software list is empty — registry read likely failed")
+          else:
+              first = sw[0]
+              for field in ["name", "version", "publisher"]:
+                  if field not in first:
+                      errors.append(f"software[0] missing field: '{field}'")
+              print(f"OK: {len(sw)} software entries found")
+
+          # ── folders checks ───────────────────────────────────
+          folders = data.get("folders", [])
+          if not isinstance(folders, list):
+              errors.append("folders is not a list")
+          elif len(folders) == 0:
+              errors.append("folders list is empty — folder walk likely failed")
+          else:
+              for i, f in enumerate(folders[:3]):
+                  if "path" not in f:
+                      errors.append(f"folders[{i}] missing 'path'")
+                  if "size_bytes" not in f:
+                      errors.append(f"folders[{i}] missing 'size_bytes'")
+              print(f"OK: {len(folders)} folder entries found")
+
+          # ── large_files checks ───────────────────────────────
+          lf = data.get("large_files", [])
+          if not isinstance(lf, list):
+              errors.append("large_files is not a list")
+          else:
+              # Not an error if empty (machine may have no files >100MB in scanned paths)
+              print(f"OK: {len(lf)} large file(s) found")
+              if len(lf) > 0:
+                  for field in ["path", "size_bytes", "owner", "modified_utc"]:
+                      if field not in lf[0]:
+                          errors.append(f"large_files[0] missing field: '{field}'")
+
+          # ── _meta checks ─────────────────────────────────────
+          meta = data.get("_meta", {})
+          if meta.get("total_elapsed_seconds", 0) <= 0:
+              errors.append("_meta.total_elapsed_seconds is 0 or missing")
+
+          # ── Report ───────────────────────────────────────────
+          print("\n── Validation summary ──────────────────────────")
+          if errors:
+              for e in errors:
+                  print(f"  FAIL: {e}")
+              print(f"\n{len(errors)} error(s) found.")
+              sys.exit(1)
+          else:
+              size_kb = round(os.path.getsize(path) / 1024, 1)
+              print(f"  All checks passed.")
+              print(f"  Report size : {size_kb} KB")
+              print(f"  Hostname    : {si.get('hostname')}")
+              print(f"  OS          : {si.get('os', {}).get('release')} {si.get('os', {}).get('version','')[:20]}")
+              print(f"  RAM total   : {round(mem.get('total_bytes',0)/1073741824,1)} GB")
+              print(f"  Software    : {len(sw)} entries")
+              print(f"  Folders     : {len(folders)} entries")
+              print(f"  Large files : {len(lf)} entries")
+
+      # ── 6. Upload exe as downloadable artifact ───────────────
+      - name: Upload scanner.exe
         uses: actions/upload-artifact@v4
         with:
           name: scanner-exe
           path: dist/scanner.exe
           retention-days: 30
+
+      # ── 7. Upload report for inspection ─────────────────────
+      - name: Upload scan_report.json (from CI runner)
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-report-ci
+          path: dist/scan_report.json
+          retention-days: 7
