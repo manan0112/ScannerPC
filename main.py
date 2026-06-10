@@ -21,10 +21,16 @@ from config import OUTPUT_FILE
 # Each entry: (section_key, module_path, callable_name)
 # Lazy imports keep startup fast and allow selective skipping.
 COLLECTORS = [
-    ("system_info", "collectors.system_info", "collect"),
-    ("software",    "collectors.software",    "collect"),
-    ("folders",     "collectors.folders",     "collect"),
-    ("large_files", "collectors.files",       "collect"),
+    ("system_info",  "collectors.system_info",  "collect"),
+    ("software",     "collectors.software",     "collect"),
+    ("startup",      "collectors.startup",      "collect"),
+    ("security",     "collectors.security",     "collect"),
+    ("network",      "collectors.network",      "collect"),
+    ("onedrive",     "collectors.onedrive",     "collect"),
+    ("junk",         "collectors.junk",         "collect"),
+    ("user_folders", "collectors.user_folders", "collect"),
+    ("folders",      "collectors.folders",      "collect"),
+    ("large_files",  "collectors.files",        "collect"),
 ]
 
 
@@ -106,7 +112,6 @@ def main() -> None:
         report[sec_key] = result
         timings[sec_key] = elapsed
 
-    # Metadata enrichment pass on large files.
     if "large_files" not in skip:
         _enrich_large_files(report)
 
