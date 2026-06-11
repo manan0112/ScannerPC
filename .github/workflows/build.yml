@@ -84,7 +84,8 @@ jobs:
 
           # ── Top-level keys ───────────────────────────────────────────────────
           required = [
-              "system_info", "software", "startup", "security", "network",
+              "system_info", "software", "processes", "disk_health",
+              "startup", "security", "network",
               "onedrive", "junk", "user_folders", "folders", "large_files", "_meta",
           ]
           for key in required:
@@ -113,6 +114,32 @@ jobs:
                   if field not in sw[0]:
                       errors.append(f"software[0] missing: '{field}'")
               print(f"OK  software      : {len(sw)} entries")
+
+          # ── processes ─────────────────────────────────────────────────────────
+          procs = data.get("processes", {})
+          if not isinstance(procs, dict):
+              errors.append("processes is not a dict")
+          else:
+              top = procs.get("top_by_memory", [])
+              if not isinstance(top, list) or len(top) == 0:
+                  errors.append("processes.top_by_memory is empty — process snapshot failed")
+              else:
+                  worst = top[0]
+                  mb = round(worst.get("memory_bytes", 0) / 1048576)
+                  print(f"OK  processes     : {len(top)} entries, top={worst.get('name')} ({mb} MB)")
+
+          # ── disk_health ───────────────────────────────────────────────────────
+          dh = data.get("disk_health", {})
+          if not isinstance(dh, dict):
+              errors.append("disk_health is not a dict")
+          else:
+              pd = dh.get("physical_disks", [])
+              if not isinstance(pd, list) or len(pd) == 0:
+                  errors.append("disk_health.physical_disks is empty — WMI query failed")
+              else:
+                  models = ", ".join(d.get("model", "?") for d in pd)
+                  print(f"OK  disk_health   : {len(pd)} disk(s) [{models}], "
+                        f"failure_predicted={dh.get('any_failure_predicted')}")
 
           # ── startup ───────────────────────────────────────────────────────────
           st_list = data.get("startup", [])

@@ -23,6 +23,8 @@ from config import OUTPUT_FILE
 COLLECTORS = [
     ("system_info",  "collectors.system_info",  "collect"),
     ("software",     "collectors.software",     "collect"),
+    ("processes",    "collectors.processes",    "collect"),
+    ("disk_health",  "collectors.disk_health",  "collect"),
     ("startup",      "collectors.startup",      "collect"),
     ("security",     "collectors.security",     "collect"),
     ("network",      "collectors.network",      "collect"),

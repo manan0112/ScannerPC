@@ -140,6 +140,21 @@ def score_machine(scan: dict) -> dict:
         score -= 5
         issues.append("MEDIUM: No AV product detected in SecurityCenter2")
 
+    # ── Disk health ───────────────────────────────────────────────────────────
+    dh = scan.get("disk_health", {})
+    if dh.get("any_failure_predicted"):
+        score -= 35
+        for w in dh.get("warnings", []):
+            issues.append(f"CRITICAL: Disk health — {w}")
+        actions.append("Back up immediately and replace the failing disk")
+    else:
+        # No SSD detected → an HDD-only machine feels slow regardless of CPU/RAM
+        media = {d.get("media_type", "") for d in dh.get("physical_disks", [])}
+        if media and "SSD" not in media and any("HDD" in m or "hard" in m.lower() for m in media):
+            score -= 10
+            issues.append("MEDIUM: No SSD detected — HDD-only system, slow boot and load times")
+            actions.append("Install SSD as boot drive — single biggest speed upgrade available")
+
     # ── Startup bloat ─────────────────────────────────────────────────────────
     startup_count = len(scan.get("startup", []))
     if startup_count > 15:

@@ -17,6 +17,8 @@ a = Analysis(
     hiddenimports=[
         'collectors.system_info',
         'collectors.software',
+        'collectors.processes',
+        'collectors.disk_health',
         'collectors.startup',
         'collectors.security',
         'collectors.network',
