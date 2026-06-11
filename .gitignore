@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+
+# PyInstaller build output
+build/
+dist/
+*.manifest
+
+# Scan outputs and generated reports
+scan_report*.json
+analyser/reports/*.xlsx
+analyser/reports/*.json
+analyser/reports/ai_summary.txt
