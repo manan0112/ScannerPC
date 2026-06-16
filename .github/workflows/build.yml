@@ -23,12 +23,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.7'
           cache: 'pip'
 
       # ── 3. Install build dependencies ────────────────────────────────────────
       - name: Install PyInstaller
-        run: pip install "pyinstaller==6.11.1"
+        run: pip install "pyinstaller==5.13.2"
 
       # ── 4. Ensure collectors package is importable ────────────────────────────
       - name: Create collectors/__init__.py

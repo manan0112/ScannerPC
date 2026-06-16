@@ -3,9 +3,20 @@ collectors/network.py — IP addresses, MAC addresses, mapped network drives, do
 """
 import json
 import os
-import socket
 import subprocess
 import winreg
+
+try:
+    import socket as _socket
+    def _gethostname():
+        return _socket.gethostname()
+    def _getaddrinfo(host):
+        return _socket.getaddrinfo(host, None, _socket.AF_INET)
+except ImportError:
+    def _gethostname():
+        return os.environ.get("COMPUTERNAME", "unknown")
+    def _getaddrinfo(host):
+        return []
 
 
 def _wmi_adapters() -> list:
@@ -42,13 +53,13 @@ def _wmi_adapters() -> list:
         return []
 
 
-def _fallback_ips() -> list:
+def _fallback_ips():
     """Plain socket fallback when WMI is unavailable."""
     try:
-        hostname = socket.gethostname()
-        seen: set = set()
+        hostname = _gethostname()
+        seen = set()
         ips = []
-        for _, _, _, _, (ip, _) in socket.getaddrinfo(hostname, None, socket.AF_INET):
+        for _, _, _, _, (ip, _) in _getaddrinfo(hostname):
             if ip not in seen and not ip.startswith("127."):
                 seen.add(ip)
                 ips.append({"description": "unknown", "mac": "", "ipv4": [ip]})
@@ -88,5 +99,5 @@ def collect() -> dict:
         "mapped_drives":  _mapped_drives(),
         "domain":         os.environ.get("USERDOMAIN", ""),
         "logged_in_user": os.environ.get("USERNAME", ""),
-        "computer_name":  os.environ.get("COMPUTERNAME", socket.gethostname()),
+        "computer_name":  os.environ.get("COMPUTERNAME", _gethostname()),
     }

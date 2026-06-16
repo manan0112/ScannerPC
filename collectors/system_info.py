@@ -5,12 +5,24 @@ Returns a flat dict suitable for JSON serialisation.
 
 import os
 import platform
-import socket
 import ctypes
 import datetime
 
+# socket may fail on broken/old Windows installs — import defensively
+try:
+    import socket as _socket
+    def _hostname():
+        return _socket.gethostname()
+    def _fqdn():
+        return _socket.getfqdn()
+except ImportError:
+    def _hostname():
+        return os.environ.get("COMPUTERNAME", "unknown")
+    def _fqdn():
+        return os.environ.get("COMPUTERNAME", "unknown")
 
-def _uptime_seconds() -> int:
+
+def _uptime_seconds():
     """Return system uptime in seconds using GetTickCount64 (Windows only)."""
     try:
         return ctypes.windll.kernel32.GetTickCount64() // 1000
@@ -18,26 +30,24 @@ def _uptime_seconds() -> int:
         return -1
 
 
-def _format_uptime(seconds: int) -> str:
+def _format_uptime(seconds):
     if seconds < 0:
         return "unavailable"
     td = datetime.timedelta(seconds=seconds)
     days = td.days
     hours, rem = divmod(td.seconds, 3600)
     minutes = rem // 60
-    return f"{days}d {hours}h {minutes}m"
+    return "%dd %dh %dm" % (days, hours, minutes)
 
 
-def _disk_partitions() -> list:
+def _disk_partitions():
     partitions = []
     try:
-        import ctypes
         drives_mask = ctypes.windll.kernel32.GetLogicalDrives()
         for i in range(26):
             if drives_mask & (1 << i):
                 letter = chr(ord('A') + i) + ":\\"
                 drive_type = ctypes.windll.kernel32.GetDriveTypeW(letter)
-                # 3 = DRIVE_FIXED, 2 = DRIVE_REMOVABLE, 4 = DRIVE_REMOTE
                 type_map = {2: "removable", 3: "fixed", 4: "network",
                             5: "cdrom", 6: "ramdisk"}
                 drive_type_str = type_map.get(drive_type, "unknown")
@@ -61,7 +71,7 @@ def _disk_partitions() -> list:
     return partitions
 
 
-def _memory_info() -> dict:
+def _memory_info():
     try:
         class MEMORYSTATUSEX(ctypes.Structure):
             _fields_ = [
@@ -89,7 +99,7 @@ def _memory_info() -> dict:
         return {"error": str(exc)}
 
 
-def _cpu_info() -> dict:
+def _cpu_info():
     info = {
         "processor": platform.processor() or "unknown",
         "machine": platform.machine(),
@@ -101,7 +111,8 @@ def _cpu_info() -> dict:
             winreg.HKEY_LOCAL_MACHINE,
             r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
         )
-        info["name"] = winreg.QueryValueEx(key, "ProcessorNameString")[0].strip()
+        name = winreg.QueryValueEx(key, "ProcessorNameString")[0]
+        info["name"] = str(name).strip()
         info["mhz"] = winreg.QueryValueEx(key, "~MHz")[0]
         winreg.CloseKey(key)
     except Exception:
@@ -109,16 +120,22 @@ def _cpu_info() -> dict:
     return info
 
 
-def collect() -> dict:
+def collect():
     uptime_s = _uptime_seconds()
+    # win32_edition() added in Python 3.8 — guard for 3.7
+    try:
+        edition = platform.win32_edition() if hasattr(platform, "win32_edition") else "unknown"
+    except Exception:
+        edition = "unknown"
+
     return {
-        "hostname": socket.gethostname(),
-        "fqdn": socket.getfqdn(),
+        "hostname": _hostname(),
+        "fqdn": _fqdn(),
         "os": {
             "system": platform.system(),
             "release": platform.release(),
             "version": platform.version(),
-            "edition": platform.win32_edition() if hasattr(platform, "win32_edition") else "unknown",
+            "edition": edition,
             "architecture": platform.architecture()[0],
         },
         "cpu": _cpu_info(),
