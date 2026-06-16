@@ -67,15 +67,20 @@ def _read_subkey(hive_handle, subkey_path: str) -> list:
 
 def _normalise(entry: dict) -> dict:
     """Return a clean, consistently-keyed dict for JSON output."""
+    # Registry values can be DWORD (int) instead of REG_SZ — coerce to str defensively.
+    def _s(key: str) -> str:
+        v = entry.get(key)
+        return str(v).strip() if v is not None else ""
+
     size_kb = entry.get("EstimatedSize")
     return {
-        "name":             entry.get("DisplayName", "").strip(),
-        "version":          entry.get("DisplayVersion", "").strip(),
-        "publisher":        entry.get("Publisher", "").strip(),
-        "install_date":     entry.get("InstallDate", "").strip(),
-        "install_location": entry.get("InstallLocation", "").strip(),
+        "name":             _s("DisplayName"),
+        "version":          _s("DisplayVersion"),
+        "publisher":        _s("Publisher"),
+        "install_date":     _s("InstallDate"),
+        "install_location": _s("InstallLocation"),
         "size_kb":          int(size_kb) if size_kb is not None else None,
-        "uninstall_string": entry.get("UninstallString", "").strip(),
+        "uninstall_string": _s("UninstallString"),
     }
 
 
