@@ -56,6 +56,16 @@ def _section(title):
     _colour(_RESET)
 
 
+# -- Safe int helper ----------------------------------------------------------
+
+def _int(v, default=0):
+    """int() that handles None / missing WMI nulls gracefully."""
+    try:
+        return int(v) if v is not None else default
+    except (TypeError, ValueError):
+        return default
+
+
 # -- PowerShell helper ---------------------------------------------------------
 
 def _ps(cmd, timeout=20):
@@ -99,8 +109,8 @@ def _get_system_info():
     return {
         "manufacturer": str(raw.get("Manufacturer", "")).strip(),
         "model":        str(raw.get("Model", "")).strip(),
-        "ram_bytes":    int(raw.get("TotalPhysicalMemory", 0)),
-        "logical_cpus": int(raw.get("NumberOfLogicalProcessors", 0)),
+        "ram_bytes":    _int(raw.get("TotalPhysicalMemory")),
+        "logical_cpus": _int(raw.get("NumberOfLogicalProcessors")),
         "serial":       str(bios.get("SerialNumber", "")).strip(),
         "bios_version": str(bios.get("SMBIOSBIOSVersion", "")).strip(),
         "chassis_types": chassis.get("ChassisTypes", []),
@@ -144,9 +154,9 @@ def _get_ram_info():
 
     sticks = []
     for s in raw:
-        cap = int(s.get("Capacity", 0))
-        spd = int(s.get("Speed", 0))
-        mt  = int(s.get("SMBIOSMemoryType", s.get("MemoryType", 0)))
+        cap = _int(s.get("Capacity"))
+        spd = _int(s.get("Speed"))
+        mt  = _int(s.get("SMBIOSMemoryType") or s.get("MemoryType"))
         # SMBIOSMemoryType: 26=DDR4, 24=DDR3, 34=DDR5
         type_map = {24: "DDR3", 26: "DDR4", 34: "DDR5", 20: "DDR", 21: "DDR2"}
         sticks.append({
@@ -181,7 +191,7 @@ def _get_storage_info():
             disks.append({
                 "name":   str(d.get("FriendlyName", "")),
                 "type":   str(d.get("MediaType", "Unspecified")),
-                "size_gb": round(int(d.get("Size", 0)) / (1024**3), 0),
+                "size_gb": round(_int(d.get("Size")) / (1024**3), 0),
                 "health": str(d.get("HealthStatus", "")),
                 "status": str(d.get("OperationalStatus", "")),
             })
@@ -196,7 +206,7 @@ def _get_storage_info():
             raw2 = [raw2]
         if isinstance(raw2, list):
             for d in raw2:
-                sz = int(d.get("Size", 0))
+                sz = _int(d.get("Size"))
                 disks.append({
                     "name":   str(d.get("Model", "")),
                     "type":   "SSD" if "SSD" in str(d.get("Model", "")).upper() else "HDD",
@@ -246,9 +256,9 @@ def _get_battery_info():
     )
     full_cap = 0
     if isinstance(raw, dict):
-        full_cap = int(raw.get("FullChargedCapacity", 0))
+        full_cap = _int(raw.get("FullChargedCapacity"))
     elif isinstance(raw, list) and raw:
-        full_cap = int(raw[0].get("FullChargedCapacity", 0))
+        full_cap = _int(raw[0].get("FullChargedCapacity"))
 
     static = _ps_json(
         "Get-WmiObject -Namespace root\\WMI -Class BatteryStaticData "
@@ -256,9 +266,9 @@ def _get_battery_info():
     )
     design_cap = 0
     if isinstance(static, dict):
-        design_cap = int(static.get("DesignedCapacity", 0))
+        design_cap = _int(static.get("DesignedCapacity"))
     elif isinstance(static, list) and static:
-        design_cap = int(static[0].get("DesignedCapacity", 0))
+        design_cap = _int(static[0].get("DesignedCapacity"))
 
     cycle_raw = _ps_json(
         "Get-WmiObject -Namespace root\\WMI -Class BatteryCycleCount "
@@ -266,9 +276,9 @@ def _get_battery_info():
     )
     cycle_count = 0
     if isinstance(cycle_raw, dict):
-        cycle_count = int(cycle_raw.get("CycleCount", 0))
+        cycle_count = _int(cycle_raw.get("CycleCount"))
     elif isinstance(cycle_raw, list) and cycle_raw:
-        cycle_count = int(cycle_raw[0].get("CycleCount", 0))
+        cycle_count = _int(cycle_raw[0].get("CycleCount"))
 
     # Fallback: Win32_Battery
     win32_bat = _ps_json(
@@ -281,7 +291,7 @@ def _get_battery_info():
     bat_present = bool(win32_bat) and isinstance(win32_bat, list)
     bat_status_code = 0
     if bat_present and win32_bat:
-        bat_status_code = int(win32_bat[0].get("BatteryStatus", 0))
+        bat_status_code = _int(win32_bat[0].get("BatteryStatus"))
     # BatteryStatus: 1=Other, 2=Unknown, 3=Fully Charged, 4=Low, 5=Critical,
     #                6=Charging, 7=Charging+High, 8=Charging+Low, 9=Charging+Critical,
     #                10=Undefined, 11=Partially Charged
@@ -318,7 +328,7 @@ def _get_gpu_info():
         raw = [raw]
     gpus = []
     for g in (raw if isinstance(raw, list) else []):
-        vram = int(g.get("AdapterRAM", 0))
+        vram = _int(g.get("AdapterRAM"))
         gpus.append({
             "name":    str(g.get("Name", "")),
             "vram_mb": round(vram / (1024**2)) if vram > 0 else 0,
@@ -338,8 +348,8 @@ def _get_display_info():
 
     monitors = []
     for m in (raw if isinstance(raw, list) else []):
-        w = int(m.get("ScreenWidth", 0))
-        h = int(m.get("ScreenHeight", 0))
+        w = _int(m.get("ScreenWidth"))
+        h = _int(m.get("ScreenHeight"))
         if w and h:
             monitors.append({"width": w, "height": h, "type": str(m.get("MonitorType", ""))})
 
@@ -441,7 +451,7 @@ def _get_temps():
         raw = [raw]
     temps = []
     for t in (raw if isinstance(raw, list) else []):
-        k = int(t.get("CurrentTemperature", 0))
+        k = _int(t.get("CurrentTemperature"))
         if k > 0:
             c = round((k - 2732) / 10.0, 1)
             if 0 < c < 120:
@@ -962,7 +972,10 @@ def main():
         "price":        args.price,
     }
     run_checks(promised)
-    input("  Press ENTER to exit...")
+    try:
+        input("  Press ENTER to exit...")
+    except (EOFError, KeyboardInterrupt):
+        pass
 
 
 if __name__ == "__main__":
