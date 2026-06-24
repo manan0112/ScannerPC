@@ -1,5 +1,5 @@
 """
-laptop_check.py — Second-hand laptop buyer's health check.
+laptop_check.py -- Second-hand laptop buyer's health check.
 Run this on any laptop before you pay. No installation needed.
 
 Usage:
@@ -17,7 +17,7 @@ import sys
 import time
 import winreg
 
-# ── Console colour helpers (plain Windows API, no third-party deps) ───────────
+# -- Console colour helpers (plain Windows API, no third-party deps) -----------
 
 _STD_OUTPUT_HANDLE = -11
 _RESET   = 0x07   # grey on black
@@ -50,13 +50,13 @@ def _print_info(msg):
 def _section(title):
     _colour(_WHITE)
     print()
-    print("  " + "─" * 56)
+    print("  " + "-" * 56)
     print(f"  {title}")
-    print("  " + "─" * 56)
+    print("  " + "-" * 56)
     _colour(_RESET)
 
 
-# ── PowerShell helper ─────────────────────────────────────────────────────────
+# -- PowerShell helper ---------------------------------------------------------
 
 def _ps(cmd, timeout=20):
     """Run a PowerShell command and return stdout as string, or '' on failure."""
@@ -81,7 +81,7 @@ def _ps_json(cmd, timeout=20):
         return {}
 
 
-# ── Collectors ────────────────────────────────────────────────────────────────
+# -- Collectors ----------------------------------------------------------------
 
 def _get_system_info():
     raw = _ps_json(
@@ -355,7 +355,7 @@ def _get_display_info():
         except Exception:
             pass
 
-    # DPI from registry → estimate physical size
+    # DPI from registry -> estimate physical size
     dpi = 96
     try:
         key = winreg.OpenKey(
@@ -449,7 +449,7 @@ def _get_temps():
     return temps
 
 
-# ── CPU generation parser ────────────────────────────────────────────────────
+# -- CPU generation parser ----------------------------------------------------
 
 def _parse_cpu_gen(name):
     """Return (brand, generation_int, series) from CPU name string."""
@@ -480,11 +480,11 @@ def _parse_cpu_gen(name):
         series = "i7" if "i7" in name_up else ("i5" if "i5" in name_up else "")
         return "Intel", gen, series.lower()
 
-    # AMD Ryzen — Ryzen 5 5600 → gen 5xxx (Zen3)
+    # AMD Ryzen -- Ryzen 5 5600 -> gen 5xxx (Zen3)
     m = re.search(r"Ryzen\s+[3579]\s+(\d{4})", name, re.IGNORECASE)
     if m:
         model = int(m.group(1))
-        gen = int(str(model)[0])   # 5600 → 5, 7700 → 7, 3600 → 3
+        gen = int(str(model)[0])   # 5600 -> 5, 7700 -> 7, 3600 -> 3
         return "AMD", gen, "Ryzen"
 
     if "PENTIUM" in name_up or "CELERON" in name_up:
@@ -493,7 +493,7 @@ def _parse_cpu_gen(name):
     return "Unknown", 0, ""
 
 
-# ── Result accumulator ────────────────────────────────────────────────────────
+# -- Result accumulator --------------------------------------------------------
 
 class Results:
     def __init__(self):
@@ -526,7 +526,7 @@ class Results:
         _print_info(msg)
 
 
-# ── Main report ───────────────────────────────────────────────────────────────
+# -- Main report ---------------------------------------------------------------
 
 def run_checks(promised):
     R = Results()
@@ -541,10 +541,10 @@ def run_checks(promised):
 
     print()
     _colour(_WHITE)
-    print("  " + "═" * 56)
+    print("  " + "=" * 56)
     print("    SECOND-HAND LAPTOP BUYER'S CHECK")
     print("    Know exactly what you're buying before you pay")
-    print("  " + "═" * 56)
+    print("  " + "=" * 56)
     _colour(_RESET)
 
     if promised_mfr or promised_gen or promised_ram_gb:
@@ -565,7 +565,7 @@ def run_checks(promised):
 
     t0 = time.perf_counter()
 
-    # ── 1. Collect all data ───────────────────────────────────────────────────
+    # -- 1. Collect all data ---------------------------------------------------
     sys_info = _get_system_info()
     cpu      = _get_cpu_info()
     ram      = _get_ram_info()
@@ -578,9 +578,9 @@ def run_checks(promised):
 
     brand, cpu_gen, cpu_series = _parse_cpu_gen(cpu["name"])
 
-    # ── 2. Report sections ────────────────────────────────────────────────────
+    # -- 2. Report sections ----------------------------------------------------
 
-    # — System Identity —
+    # -- System Identity --
     _section("SYSTEM IDENTITY")
     mfr = sys_info["manufacturer"]
     model = sys_info["model"]
@@ -590,7 +590,7 @@ def run_checks(promised):
             R.ok_(f"Manufacturer   : {mfr}")
         else:
             R.fail_(f"Manufacturer   : {mfr}  (promised: {promised_mfr.title()})",
-                    "Machine brand doesn't match — confirm before buying")
+                    "Machine brand doesn't match -- confirm before buying")
     else:
         R.ok_(f"Manufacturer   : {mfr}")
 
@@ -600,9 +600,9 @@ def run_checks(promised):
         R.ok_(f"Serial Number  : {serial}")
         R.info_("Check serial on manufacturer website to verify warranty status")
     else:
-        R.warn_("Serial Number  : Not readable — could be a modified/unmarked unit")
+        R.warn_("Serial Number  : Not readable -- could be a modified/unmarked unit")
 
-    # — CPU —
+    # -- CPU --
     _section("PROCESSOR (CPU)")
     if cpu["name"]:
         R.ok_(f"Processor      : {cpu['name']}")
@@ -614,14 +614,14 @@ def run_checks(promised):
         if promised_gen and cpu_gen != promised_gen:
             R.fail_(f"Generation     : {cpu_gen}th Gen {brand} {cpu_series.upper()}  "
                     f"(promised: {promised_gen}th Gen)",
-                    f"CPU is {promised_gen - cpu_gen} generation(s) older than promised — "
+                    f"CPU is {promised_gen - cpu_gen} generation(s) older than promised -- "
                     f"ask for Rs.{abs(promised_gen - cpu_gen) * 2000:,} discount")
         elif promised_series and cpu_series and promised_series not in cpu_series:
             R.fail_(f"Series         : Core {cpu_series.upper()}  "
                     f"(promised: Core {promised_series.upper()})",
-                    f"CPU series doesn't match — this affects performance significantly")
+                    f"CPU series doesn't match -- this affects performance significantly")
         else:
-            R.ok_(f"Generation     : {cpu_gen}th Gen {brand}  {'✓ matches promise' if promised_gen else ''}")
+            R.ok_(f"Generation     : {cpu_gen}th Gen {brand}  {'(v) matches promise' if promised_gen else ''}")
     else:
         R.warn_("Generation     : Could not determine CPU generation")
 
@@ -630,7 +630,7 @@ def run_checks(promised):
     if cpu["mhz"] > 0:
         R.ok_(f"Base Clock     : {cpu['mhz']:,} MHz")
 
-    # — RAM —
+    # -- RAM --
     _section("MEMORY (RAM)")
     sticks = ram["sticks"]
     total_ram_gb = sum(s["size_gb"] for s in sticks)
@@ -642,7 +642,7 @@ def run_checks(promised):
             R.fail_(f"Total RAM      : {total_ram_gb:.0f} GB  (promised: {promised_ram_gb} GB)",
                     f"RAM is {abs(total_ram_gb - promised_ram_gb):.0f}GB less than promised")
         else:
-            R.ok_(f"Total RAM      : {total_ram_gb:.0f} GB  ✓ matches promise")
+            R.ok_(f"Total RAM      : {total_ram_gb:.0f} GB  (v) matches promise")
     elif total_ram_gb > 0:
         R.ok_(f"Total RAM      : {total_ram_gb:.0f} GB")
 
@@ -651,16 +651,16 @@ def run_checks(promised):
 
     free_slots = total_slots - used_slots
     if free_slots > 0:
-        R.info_(f"Upgrade room   : {free_slots} slot(s) free — can add more RAM later")
+        R.info_(f"Upgrade room   : {free_slots} slot(s) free -- can add more RAM later")
     else:
         R.info_("Upgrade room   : All RAM slots in use")
 
-    # — Storage —
+    # -- Storage --
     _section("STORAGE (SSD / HDD)")
 
     if storage["smart_fail"]:
-        R.fail_("SMART Health   : FAILURE PREDICTED — disk may die soon!",
-                "DO NOT BUY — the disk is failing. Data loss risk.")
+        R.fail_("SMART Health   : FAILURE PREDICTED -- disk may die soon!",
+                "DO NOT BUY -- the disk is failing. Data loss risk.")
     else:
         R.ok_("SMART Health   : No failure predicted")
 
@@ -681,10 +681,10 @@ def run_checks(promised):
             boot_disk_gb   = size
 
         if is_ssd:
-            R.ok_(f"Disk Type      : SSD / NVMe  ✓  ({dname})")
+            R.ok_(f"Disk Type      : SSD / NVMe  (v)  ({dname})")
         elif is_hdd:
-            R.fail_(f"Disk Type      : HDD — NOT an SSD!  ({dname})",
-                    "This is a spinning hard disk, NOT SSD. Negotiate Rs.3,000–5,000 off "
+            R.fail_(f"Disk Type      : HDD -- NOT an SSD!  ({dname})",
+                    "This is a spinning hard disk, NOT SSD. Negotiate Rs.3,000-5,000 off "
                     "or ask them to install an SSD before sale")
         elif "UNSPECIFIED" in dtype.upper() or "UNKNOWN" in dtype.upper():
             R.warn_(f"Disk Type      : Could not confirm SSD/HDD  ({dname})")
@@ -696,7 +696,7 @@ def run_checks(promised):
                 R.fail_(f"Disk Size      : {size:.0f} GB  (promised: {promised_ssd_gb} GB)",
                         f"Disk is {abs(size - promised_ssd_gb):.0f}GB different from promised")
             else:
-                R.ok_(f"Disk Size      : {size:.0f} GB  ✓ matches promise")
+                R.ok_(f"Disk Size      : {size:.0f} GB  (v) matches promise")
         elif size > 0:
             R.ok_(f"Disk Size      : {size:.0f} GB")
 
@@ -709,7 +709,7 @@ def run_checks(promised):
         free_pct = round((storage["c_free_gb"] / storage["c_total_gb"]) * 100)
         R.ok_(f"C: Free Space  : {storage['c_free_gb']:.0f} GB of {storage['c_total_gb']:.0f} GB ({free_pct}% free)")
 
-    # — Battery —
+    # -- Battery --
     _section("BATTERY HEALTH")
     if not battery["present"] or battery["health_pct"] == -1:
         R.info_("No battery detected (desktop / running on AC only)")
@@ -724,31 +724,31 @@ def run_checks(promised):
             R.ok_(f"Current Max    : {fc:,} mWh")
 
         if hp >= 80:
-            R.ok_(f"Battery Health : {hp}%  — Good")
+            R.ok_(f"Battery Health : {hp}%  -- Good")
         elif hp >= 60:
-            R.warn_(f"Battery Health : {hp}%  — Moderate wear",
-                    f"Battery at {hp}% — negotiate Rs.1,500–2,500 off or ask for new battery")
+            R.warn_(f"Battery Health : {hp}%  -- Moderate wear",
+                    f"Battery at {hp}% -- negotiate Rs.1,500-2,500 off or ask for new battery")
         elif hp >= 40:
-            R.warn_(f"Battery Health : {hp}%  — Heavy wear (replacement soon)",
-                    f"Battery at {hp}% — ask for Rs.2,500–4,000 discount (new battery cost)")
+            R.warn_(f"Battery Health : {hp}%  -- Heavy wear (replacement soon)",
+                    f"Battery at {hp}% -- ask for Rs.2,500-4,000 discount (new battery cost)")
         elif hp > 0:
-            R.fail_(f"Battery Health : {hp}%  — Very poor, needs immediate replacement",
-                    f"Battery nearly dead — negotiate Rs.4,000+ off or have them replace it")
+            R.fail_(f"Battery Health : {hp}%  -- Very poor, needs immediate replacement",
+                    f"Battery nearly dead -- negotiate Rs.4,000+ off or have them replace it")
         else:
             R.warn_("Battery Health : Could not read capacity (WMI not supported on this system)")
 
         if cc > 0:
             if cc < 300:
-                R.ok_(f"Cycle Count    : {cc} cycles  — Low use")
+                R.ok_(f"Cycle Count    : {cc} cycles  -- Low use")
             elif cc < 500:
-                R.warn_(f"Cycle Count    : {cc} cycles  — Moderate use")
+                R.warn_(f"Cycle Count    : {cc} cycles  -- Moderate use")
             else:
-                R.warn_(f"Cycle Count    : {cc} cycles  — Heavy use",
-                        f"High cycle count ({cc}) — battery life will be short per charge")
+                R.warn_(f"Cycle Count    : {cc} cycles  -- Heavy use",
+                        f"High cycle count ({cc}) -- battery life will be short per charge")
 
         R.ok_(f"Battery Status : {battery['status']}")
 
-    # — Graphics —
+    # -- Graphics --
     _section("GRAPHICS (GPU)")
     for i, g in enumerate(gpus, 1):
         name   = g["name"]
@@ -763,11 +763,11 @@ def run_checks(promised):
         is_intel_uhd  = "UHD" in name.upper() or "HD GRAPHICS" in name.upper()
 
         if is_dedicated:
-            R.ok_(f"{prefix}          : {name}  (Dedicated GPU ✓)")
+            R.ok_(f"{prefix}          : {name}  (Dedicated GPU (v))")
         elif is_intel_iris:
-            R.ok_(f"{prefix}          : {name}  (Intel Iris — good integrated)")
+            R.ok_(f"{prefix}          : {name}  (Intel Iris -- good integrated)")
         elif is_intel_uhd:
-            R.ok_(f"{prefix}          : {name}  (Intel UHD — integrated, suitable for office)")
+            R.ok_(f"{prefix}          : {name}  (Intel UHD -- integrated, suitable for office)")
         else:
             R.ok_(f"{prefix}          : {name}")
 
@@ -779,7 +779,7 @@ def run_checks(promised):
     if not gpus:
         R.warn_("GPU            : Could not read GPU information")
 
-    # — Display —
+    # -- Display --
     _section("DISPLAY")
     for d in displays:
         w = d.get("width", 0)
@@ -789,11 +789,11 @@ def run_checks(promised):
         if w and h:
             res = f"{w} x {h}"
             if h >= 1080:
-                R.ok_(f"Resolution     : {res}  (Full HD ✓)")
+                R.ok_(f"Resolution     : {res}  (Full HD (v))")
             elif h >= 768:
-                R.warn_(f"Resolution     : {res}  — HD only, not Full HD")
+                R.warn_(f"Resolution     : {res}  -- HD only, not Full HD")
             else:
-                R.warn_(f"Resolution     : {res}  — Low resolution")
+                R.warn_(f"Resolution     : {res}  -- Low resolution")
 
         if diag > 0:
             R.info_(f"Est. Diagonal  : ~{diag}\"  (calculated from resolution + DPI)")
@@ -801,40 +801,40 @@ def run_checks(promised):
     if not displays:
         R.warn_("Display        : Could not read display information")
 
-    # — Windows —
+    # -- Windows --
     _section("WINDOWS & ACTIVATION")
     R.ok_(f"Windows        : {win['product']}  (Build {win['build']})")
     if win["activated"]:
-        R.ok_("Activation     : Activated  ✓")
+        R.ok_("Activation     : Activated  (v)")
     else:
         R.fail_("Activation     : NOT ACTIVATED",
-                "Windows is not activated — you'll get nag screens and limited features. "
-                "Ask seller to provide genuine activation or deduct Rs.1,000–2,000")
+                "Windows is not activated -- you'll get nag screens and limited features. "
+                "Ask seller to provide genuine activation or deduct Rs.1,000-2,000")
 
     if win["last_update"] and win["last_update"] != "unknown":
         R.ok_(f"Last Update    : {win['last_update']}")
 
-    # — Thermals —
+    # -- Thermals --
     if temps:
         _section("TEMPERATURES")
         max_temp = max(temps)
         avg_temp = round(sum(temps) / len(temps), 1)
         if max_temp < 65:
-            R.ok_(f"CPU Temp       : {max_temp}°C  (normal)")
+            R.ok_(f"CPU Temp       : {max_temp} C  (normal)")
         elif max_temp < 80:
-            R.warn_(f"CPU Temp       : {max_temp}°C  (warm — check thermal paste age)")
+            R.warn_(f"CPU Temp       : {max_temp} C  (warm -- check thermal paste age)")
         else:
-            R.warn_(f"CPU Temp       : {max_temp}°C  — Hot! Could be clogged fan/old paste",
+            R.warn_(f"CPU Temp       : {max_temp} C  -- Hot! Could be clogged fan/old paste",
                     "High temperatures suggest the laptop needs thermal servicing (~Rs.500-1000)")
 
-    # ── VERDICT ───────────────────────────────────────────────────────────────
+    # -- VERDICT ---------------------------------------------------------------
     elapsed = round(time.perf_counter() - t0, 1)
 
     _colour(_WHITE)
     print()
-    print("  " + "═" * 56)
+    print("  " + "=" * 56)
     print("  OVERALL VERDICT")
-    print("  " + "═" * 56)
+    print("  " + "=" * 56)
     _colour(_RESET)
     print()
 
@@ -848,13 +848,13 @@ def run_checks(promised):
     spec_ok = R.fail == 0
     if spec_ok and R.warn == 0:
         _colour(_GREEN)
-        print("  VERDICT: GOOD BUY — all checks passed")
+        print("  VERDICT: GOOD BUY -- all checks passed")
         if promised_price:
             print(f"  Price Rs.{promised_price:,} looks fair for these specs")
         _colour(_RESET)
     elif spec_ok and R.warn > 0:
         _colour(_YELLOW)
-        print("  VERDICT: ACCEPTABLE — with negotiation")
+        print("  VERDICT: ACCEPTABLE -- with negotiation")
         if promised_price and R.negotiate:
             disc = sum(
                 int(re.search(r"Rs\.\s*(\d[\d,]*)", n).group(1).replace(",",""))
@@ -866,7 +866,7 @@ def run_checks(promised):
         _colour(_RESET)
     else:
         _colour(_RED)
-        print("  VERDICT: ISSUES FOUND — negotiate or walk away")
+        print("  VERDICT: ISSUES FOUND -- negotiate or walk away")
         _colour(_RESET)
 
     if R.failures:
@@ -874,7 +874,7 @@ def run_checks(promised):
         _colour(_RED)
         print("  CRITICAL ISSUES:")
         for f in R.failures:
-            print(f"    ✗ {f}")
+            print(f"    (x) {f}")
         _colour(_RESET)
 
     if R.warnings:
@@ -890,7 +890,7 @@ def run_checks(promised):
         _colour(_CYAN)
         print("  NEGOTIATION POINTS (show seller):")
         for n in R.negotiate:
-            print(f"    → {n}")
+            print(f"    -> {n}")
         _colour(_RESET)
 
     print()
@@ -930,7 +930,7 @@ def run_checks(promised):
     print()
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# -- Entry point ---------------------------------------------------------------
 
 def _parse_args():
     p = argparse.ArgumentParser(
