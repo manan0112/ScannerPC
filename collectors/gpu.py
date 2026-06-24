@@ -78,7 +78,7 @@ def _monitor_info() -> list:
     return monitors
 
 
-def _diagonal_from_edid() -> float | None:
+def _diagonal_from_edid():
     """
     Try to compute diagonal from EDID data stored in registry.
     EDID bytes 21-22 contain physical width/height in mm.
