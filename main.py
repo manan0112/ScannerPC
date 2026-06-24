@@ -6,6 +6,7 @@ Usage:
     python main.py
     python main.py --output custom_report.json
     python main.py --skip software folders
+    python main.py --no-verdict          (skip the terminal verdict display)
 """
 
 import argparse
@@ -21,10 +22,13 @@ from config import OUTPUT_FILE
 # Each entry: (section_key, module_path, callable_name)
 # Lazy imports keep startup fast and allow selective skipping.
 COLLECTORS = [
-    ("system_info", "collectors.system_info", "collect"),
-    ("software",    "collectors.software",    "collect"),
-    ("folders",     "collectors.folders",     "collect"),
-    ("large_files", "collectors.files",       "collect"),
+    ("system_info",     "collectors.system_info",     "collect"),
+    ("battery",         "collectors.battery",         "collect"),
+    ("gpu",             "collectors.gpu",             "collect"),
+    ("storage_detail",  "collectors.storage_detail",  "collect"),
+    ("software",        "collectors.software",        "collect"),
+    ("folders",         "collectors.folders",         "collect"),
+    ("large_files",     "collectors.files",           "collect"),
 ]
 
 
@@ -83,6 +87,12 @@ def _parse_args() -> argparse.Namespace:
         metavar="SECTION",
         help="Collector sections to skip, e.g. --skip software folders"
     )
+    p.add_argument(
+        "--no-verdict",
+        action="store_true",
+        default=False,
+        help="Skip the terminal verdict/health display"
+    )
     return p.parse_args()
 
 
@@ -91,7 +101,7 @@ def main() -> None:
     skip = {s.lower() for s in (args.skip or [])}
 
     print("=" * 52)
-    print("  Windows Scanner Agent")
+    print("  Windows Scanner Agent — Laptop Health Check")
     print("=" * 52)
 
     report: dict = {"_meta": {}}
@@ -132,6 +142,15 @@ def main() -> None:
     except OSError as exc:
         print(f"[FATAL] Could not write report: {exc}", file=sys.stderr)
         sys.exit(1)
+
+    # ── Verdict display ───────────────────────────────────────────────────────
+    if not args.no_verdict:
+        try:
+            from verdict import print_verdict
+            print_verdict(report)
+        except Exception:
+            print("[WARN] Verdict display failed:\n" +
+                  traceback.format_exc(), file=sys.stderr)
 
 
 if __name__ == "__main__":

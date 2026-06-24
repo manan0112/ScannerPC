@@ -2,7 +2,7 @@ name: Build & Validate scanner.exe
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "claude/**" ]
   workflow_dispatch:
 
 jobs:
@@ -67,10 +67,32 @@ jobs:
           errors = []
 
           # ── Top-level keys must exist ────────────────────────
-          required_keys = ["system_info", "software", "folders", "large_files", "_meta"]
+          required_keys = ["system_info", "battery", "gpu", "storage_detail", "software", "folders", "large_files", "_meta"]
           for key in required_keys:
               if key not in data:
                   errors.append(f"Missing top-level key: '{key}'")
+
+          # ── battery checks ──────────────────────────────────
+          bat = data.get("battery", {})
+          if "battery_present" not in bat:
+              errors.append("battery missing field: 'battery_present'")
+          else:
+              print(f"OK: battery_present={bat.get('battery_present')}, "
+                    f"health={bat.get('health_status','unknown')}")
+
+          # ── gpu checks ───────────────────────────────────────
+          gpu = data.get("gpu", {})
+          if "gpus" not in gpu:
+              errors.append("gpu missing field: 'gpus'")
+          else:
+              print(f"OK: {len(gpu.get('gpus', []))} GPU(s) found")
+
+          # ── storage_detail checks ────────────────────────────
+          sd = data.get("storage_detail", {})
+          if "physical_disks" not in sd:
+              errors.append("storage_detail missing field: 'physical_disks'")
+          else:
+              print(f"OK: {len(sd.get('physical_disks', []))} physical disk(s) found")
 
           # ── system_info checks ───────────────────────────────
           si = data.get("system_info", {})
