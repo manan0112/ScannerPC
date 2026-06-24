@@ -1,0 +1,87 @@
+name: Build laptop_check.exe
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. Python setup ──────────────────────────────────────────────────────
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.7'
+          cache: 'pip'
+
+      # ── 3. Install PyInstaller ────────────────────────────────────────────────
+      - name: Install PyInstaller
+        run: pip install "pyinstaller==5.13.2"
+
+      # ── 4. Build ──────────────────────────────────────────────────────────────
+      - name: Build laptop_check.exe
+        run: pyinstaller laptop_check.spec --noconfirm --clean
+
+      # ── 5. Verify exe exists ──────────────────────────────────────────────────
+      - name: Verify exe exists and report size
+        shell: pwsh
+        run: |
+          $exe = "dist\laptop_check.exe"
+          if (!(Test-Path $exe)) {
+            Write-Error "laptop_check.exe not found after build"
+            exit 1
+          }
+          $mb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+          Write-Host "laptop_check.exe built successfully — $mb MB"
+
+      # ── 6. Quick smoke test (no args — uses defaults) ─────────────────────────
+      - name: Smoke test laptop_check.exe
+        working-directory: dist
+        shell: pwsh
+        run: |
+          # Run with --help to verify exe launches without crashing
+          .\laptop_check.exe --help
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "laptop_check.exe --help failed with code $LASTEXITCODE"
+            exit 1
+          }
+          Write-Host "Smoke test passed"
+
+      # ── 7. Full run — produces report ─────────────────────────────────────────
+      - name: Run full check on CI machine
+        working-directory: dist
+        shell: pwsh
+        run: |
+          # Run it — this will exit via the input() prompt if stdin is closed
+          # Pipe a newline so the "Press ENTER" doesn't hang CI
+          echo "" | .\laptop_check.exe --manufacturer HP --gen 8 --series i7 --ram 8 --ssd 256 --price 25000
+          Write-Host "Full run completed (exit code: $LASTEXITCODE)"
+
+      # ── 8. Upload exe artifact ────────────────────────────────────────────────
+      - name: Upload laptop_check.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: laptop-check-exe
+          path: dist/laptop_check.exe
+          retention-days: 30
+
+      # ── 9. Upload sample report ───────────────────────────────────────────────
+      - name: Upload laptop_check_report.txt
+        uses: actions/upload-artifact@v4
+        with:
+          name: laptop-check-report-ci
+          path: dist/laptop_check_report.txt
+          retention-days: 7
+        continue-on-error: true
