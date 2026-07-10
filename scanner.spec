@@ -15,7 +15,9 @@ a = Analysis(
     datas=[],
     # Force-include collector sub-modules — PyInstaller misses dynamic imports.
     hiddenimports=[
+        'collectors.util',
         'collectors.system_info',
+        'collectors.win11_readiness',
         'collectors.software',
         'collectors.processes',
         'collectors.disk_health',
@@ -63,7 +65,11 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,                 # compress with UPX if available (smaller exe)
+    # UPX must stay OFF. Compressed .pyd/DLLs (notably _socket.pyd and
+    # _ctypes.pyd) fail to load on a subset of field machines with
+    # "DLL load failed: The parameter is incorrect", which blanked the
+    # system_info/network/junk sections on 7 of 18 scanned PCs.
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=True,             # keep console so the user sees progress output

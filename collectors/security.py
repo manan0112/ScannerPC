@@ -1,28 +1,21 @@
 """
 collectors/security.py — AV products, Windows Update status, firewall, pending reboot.
 """
-import json
-import subprocess
 import winreg
+
+from collectors.util import ps_json, safe
 
 
 def _av_products() -> list:
     """Query SecurityCenter2 WMI namespace for installed AV products."""
     try:
-        cmd = (
-            "Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct "
+        # Get-WmiObject (not Get-CimInstance) so PowerShell 2.0 on Windows 7 works too.
+        raw = ps_json(
+            "Get-WmiObject -Namespace root/SecurityCenter2 -Class AntiVirusProduct "
             "| Select-Object displayName, productState, pathToSignedProductExe "
-            "| ConvertTo-Json -Compress"
+            "| ConvertTo-Json -Compress",
+            timeout=15,
         )
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
-            capture_output=True, timeout=15,
-        )
-        if out.returncode != 0 or not out.stdout:
-            return []
-        raw = json.loads(out.stdout)
-        if isinstance(raw, dict):
-            raw = [raw]
         result = []
         for p in raw:
             state = int(p.get("productState") or 0)
@@ -106,9 +99,13 @@ def _firewall() -> dict:
 
 
 def collect() -> dict:
-    return {
-        "antivirus_products":  _av_products(),
-        "last_windows_update": _last_windows_update(),
-        "pending_reboot":      _pending_reboot(),
-        "firewall":            _firewall(),
+    errors = []
+    result = {
+        "antivirus_products":  safe(_av_products, [], errors, "antivirus_products"),
+        "last_windows_update": safe(_last_windows_update, None, errors, "last_windows_update"),
+        "pending_reboot":      safe(_pending_reboot, False, errors, "pending_reboot"),
+        "firewall":            safe(_firewall, {}, errors, "firewall"),
     }
+    if errors:
+        result["collection_errors"] = errors
+    return result

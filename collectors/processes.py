@@ -2,8 +2,9 @@
 collectors/processes.py — Snapshot of running processes, sorted by memory usage.
 Answers: "what is eating the RAM on this machine right now?"
 """
-import json
 import subprocess
+
+from collectors.util import ps_json
 
 # Cap the list so the report stays small — top consumers are what matter.
 _TOP_N = 30
@@ -11,7 +12,7 @@ _TOP_N = 30
 
 def _powershell_processes() -> list:
     try:
-        cmd = (
+        raw = ps_json(
             "Get-Process | Sort-Object WorkingSet64 -Descending "
             f"| Select-Object -First {_TOP_N} "
             "Name, Id, WorkingSet64, "
@@ -20,15 +21,6 @@ def _powershell_processes() -> list:
             "@{N='StartTime';E={if($_.StartTime){$_.StartTime.ToUniversalTime().ToString('o')}}} "
             "| ConvertTo-Json -Compress"
         )
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
-            capture_output=True, timeout=30,
-        )
-        if out.returncode != 0 or not out.stdout:
-            return []
-        raw = json.loads(out.stdout)
-        if isinstance(raw, dict):
-            raw = [raw]
         procs = []
         for p in raw:
             procs.append({

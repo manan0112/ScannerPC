@@ -84,13 +84,19 @@ jobs:
 
           # ── Top-level keys ───────────────────────────────────────────────────
           required = [
-              "system_info", "software", "processes", "disk_health",
-              "startup", "security", "network",
+              "system_info", "win11_readiness", "software", "processes",
+              "disk_health", "startup", "security", "network",
               "onedrive", "junk", "user_folders", "folders", "large_files", "_meta",
           ]
           for key in required:
               if key not in data:
                   errors.append(f"Missing top-level key: '{key}'")
+
+          # ── No section may be an error traceback ─────────────────────────────
+          for key in required:
+              v = data.get(key)
+              if isinstance(v, dict) and set(v.keys()) == {"error"}:
+                  errors.append(f"Section '{key}' failed: {v['error'].splitlines()[-1]}")
 
           # ── system_info ──────────────────────────────────────────────────────
           si = data.get("system_info", {})
@@ -104,6 +110,23 @@ jobs:
               errors.append("system_info.memory.total_bytes is 0")
           if not isinstance(si.get("disks"), list) or not si.get("disks"):
               errors.append("system_info.disks is empty")
+
+          # ── win11_readiness ──────────────────────────────────────────────────
+          w11 = data.get("win11_readiness", {})
+          if not isinstance(w11, dict):
+              errors.append("win11_readiness is not a dict")
+          else:
+              for field in ["tpm", "secure_boot", "firmware_mode", "boot_disk",
+                            "gpus", "verdict", "verdict_reasons"]:
+                  if field not in w11:
+                      errors.append(f"win11_readiness missing: '{field}'")
+              if w11.get("verdict") not in ("READY", "UPGRADE_HW", "REPLACE"):
+                  errors.append(f"win11_readiness.verdict invalid: {w11.get('verdict')!r}")
+              print(f"OK  win11         : verdict={w11.get('verdict')}, "
+                    f"tpm={w11.get('tpm', {}).get('present')}, "
+                    f"firmware={w11.get('firmware_mode')}, "
+                    f"secure_boot={w11.get('secure_boot')}, "
+                    f"boot_disk={w11.get('boot_disk', {}).get('media_type')}")
 
           # ── software ─────────────────────────────────────────────────────────
           sw = data.get("software", [])
@@ -207,6 +230,9 @@ jobs:
           meta = data.get("_meta", {})
           if meta.get("total_elapsed_seconds", 0) <= 0:
               errors.append("_meta.total_elapsed_seconds is 0 or missing")
+          if meta.get("ran_as_admin") is not True:
+              errors.append(f"_meta.ran_as_admin is {meta.get('ran_as_admin')!r} — "
+                            "elevation guarantee broken (CI runner is admin)")
 
           # ── Summary ───────────────────────────────────────────────────────────
           print("\n-- Validation summary ----------------------------------")

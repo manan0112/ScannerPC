@@ -19,6 +19,7 @@ from pathlib import Path
 # Ensure local analysis + reports packages are importable
 sys.path.insert(0, os.path.dirname(__file__))
 
+from analysis.normalise      import normalise_scan
 from analysis.hardware_score import rank_fleet
 from analysis.cleanup_plan   import build_plan
 from analysis.software_audit import fleet_software_summary
@@ -38,7 +39,7 @@ def _load_scans(scans_dir: str) -> list[dict]:
     for f in files:
         try:
             with open(f, encoding="utf-8") as fh:
-                scans.append(json.load(fh))
+                scans.append(normalise_scan(json.load(fh)))
             print(f"  Loaded: {f.name}")
         except Exception as e:
             print(f"  [WARN] Could not load {f.name}: {e}")

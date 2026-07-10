@@ -2,28 +2,18 @@
 collectors/disk_health.py — Physical disk inventory and SMART health prediction.
 Catches failing HDDs on older machines before they take data with them.
 """
-import json
-import subprocess
+from collectors.util import ps_json, safe
 
 
 def _physical_disks() -> list:
     """Win32_DiskDrive — works on Windows 7 and later."""
     try:
-        cmd = (
+        raw = ps_json(
             "Get-WmiObject Win32_DiskDrive "
             "| Select-Object Model, SerialNumber, Size, MediaType, "
             "InterfaceType, Status, Index "
             "| ConvertTo-Json -Compress"
         )
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
-            capture_output=True, timeout=30,
-        )
-        if out.returncode != 0 or not out.stdout:
-            return []
-        raw = json.loads(out.stdout)
-        if isinstance(raw, dict):
-            raw = [raw]
         disks = []
         for d in raw:
             disks.append({
@@ -43,21 +33,12 @@ def _physical_disks() -> list:
 def _storage_health() -> list:
     """Get-PhysicalDisk (Windows 8+) — HealthStatus and SSD/HDD media type."""
     try:
-        cmd = (
+        raw = ps_json(
             "Get-PhysicalDisk "
             "| Select-Object FriendlyName, SerialNumber, MediaType, HealthStatus, "
             "@{N='SizeBytes';E={$_.Size}} "
             "| ConvertTo-Json -Compress"
         )
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
-            capture_output=True, timeout=30,
-        )
-        if out.returncode != 0 or not out.stdout:
-            return []
-        raw = json.loads(out.stdout)
-        if isinstance(raw, dict):
-            raw = [raw]
         result = []
         for d in raw:
             mt = d.get("MediaType")
@@ -79,20 +60,11 @@ def _storage_health() -> list:
 def _smart_predict_failure() -> list:
     """MSStorageDriver_FailurePredictStatus — SMART 'predict failure' bit per drive."""
     try:
-        cmd = (
+        raw = ps_json(
             "Get-WmiObject -Namespace root\\wmi MSStorageDriver_FailurePredictStatus "
             "| Select-Object InstanceName, PredictFailure, Reason "
             "| ConvertTo-Json -Compress"
         )
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
-            capture_output=True, timeout=30,
-        )
-        if out.returncode != 0 or not out.stdout:
-            return []
-        raw = json.loads(out.stdout)
-        if isinstance(raw, dict):
-            raw = [raw]
         return [
             {
                 "instance":        s.get("InstanceName") or "",
@@ -106,9 +78,10 @@ def _smart_predict_failure() -> list:
 
 
 def collect() -> dict:
-    disks  = _physical_disks()
-    health = _storage_health()
-    smart  = _smart_predict_failure()
+    errors = []
+    disks  = safe(_physical_disks, [], errors, "physical_disks")
+    health = safe(_storage_health, [], errors, "storage_health")
+    smart  = safe(_smart_predict_failure, [], errors, "smart_predict")
 
     # Merge HealthStatus / media type into the disk list by serial where possible
     by_serial = {h["serial"]: h for h in health if h.get("serial")}
@@ -129,9 +102,12 @@ def collect() -> dict:
     for s in failing:
         warnings.append(f"SMART predicts failure: {s['instance']}")
 
-    return {
+    result = {
         "physical_disks":   disks,
         "smart_status":     smart,
         "any_failure_predicted": bool(failing) or bool(warnings),
         "warnings":         warnings,
     }
+    if errors:
+        result["collection_errors"] = errors
+    return result

@@ -1,56 +1,46 @@
 """
 collectors/network.py — IP addresses, MAC addresses, mapped network drives, domain info.
 """
-import json
 import os
-import subprocess
 import winreg
+
+from collectors.util import as_list, ps_json, safe
 
 try:
     import socket as _socket
+
     def _gethostname():
         return _socket.gethostname()
+
     def _getaddrinfo(host):
         return _socket.getaddrinfo(host, None, _socket.AF_INET)
-except ImportError:
+except ImportError:          # broken _socket on damaged installs
     def _gethostname():
         return os.environ.get("COMPUTERNAME", "unknown")
+
     def _getaddrinfo(host):
         return []
 
 
 def _wmi_adapters() -> list:
     """Active network adapters via WMI — works on Windows 7+."""
-    try:
-        cmd = (
-            "Get-WmiObject Win32_NetworkAdapterConfiguration "
-            "| Where-Object {$_.IPEnabled} "
-            "| Select-Object Description, MACAddress, IPAddress, DefaultIPGateway "
-            "| ConvertTo-Json -Compress"
-        )
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
-            capture_output=True, timeout=15,
-        )
-        if out.returncode != 0 or not out.stdout:
-            return []
-        raw = json.loads(out.stdout)
-        if isinstance(raw, dict):
-            raw = [raw]
-        result = []
-        for a in raw:
-            ips = a.get("IPAddress") or []
-            if isinstance(ips, str):
-                ips = [ips]
-            ipv4 = [ip for ip in ips if "." in ip and not ip.startswith("169.254")]
-            result.append({
-                "description": a.get("Description", ""),
-                "mac":         a.get("MACAddress", ""),
-                "ipv4":        ipv4,
-            })
-        return result
-    except Exception:
-        return []
+    raw = ps_json(
+        "Get-WmiObject Win32_NetworkAdapterConfiguration "
+        "| Where-Object {$_.IPEnabled} "
+        "| Select-Object Description, MACAddress, IPAddress, DefaultIPGateway "
+        "| ConvertTo-Json -Compress",
+        timeout=15,
+    )
+    result = []
+    for a in raw:
+        ips = as_list(a.get("IPAddress"))
+        ipv4 = [ip for ip in ips if "." in ip and not ip.startswith("169.254")]
+        result.append({
+            "description": a.get("Description", ""),
+            "mac":         a.get("MACAddress", ""),
+            "ipv4":        ipv4,
+        })
+    return result
 
 
 def _fallback_ips():
@@ -93,11 +83,16 @@ def _mapped_drives() -> list:
 
 
 def collect() -> dict:
-    adapters = _wmi_adapters() or _fallback_ips()
-    return {
+    errors = []
+    adapters = safe(_wmi_adapters, [], errors, "wmi_adapters") \
+        or safe(_fallback_ips, [], errors, "fallback_ips")
+    result = {
         "adapters":       adapters,
-        "mapped_drives":  _mapped_drives(),
+        "mapped_drives":  safe(_mapped_drives, [], errors, "mapped_drives"),
         "domain":         os.environ.get("USERDOMAIN", ""),
         "logged_in_user": os.environ.get("USERNAME", ""),
-        "computer_name":  os.environ.get("COMPUTERNAME", _gethostname()),
+        "computer_name":  os.environ.get("COMPUTERNAME", "") or safe(_gethostname, "unknown", errors, "hostname"),
     }
+    if errors:
+        result["collection_errors"] = errors
+    return result

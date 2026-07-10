@@ -1,10 +1,18 @@
 """
 collectors/junk.py — Measures well-known recoverable disk space.
 Each category has: path(s), size_bytes, safe_to_delete flag, description.
+
+Deliberately stdlib-only: a hard `import ctypes` here blanked this whole
+section on machines where _ctypes.pyd failed to load.
 """
-import ctypes
 import glob as _glob
 import os
+import string
+
+
+def _drive_roots():
+    """All existing drive roots (A:\\ .. Z:\\) without touching ctypes."""
+    return [l + ":\\" for l in string.ascii_uppercase if os.path.exists(l + ":\\")]
 
 
 def _dir_size(path: str) -> int:
@@ -75,14 +83,12 @@ def collect() -> dict:
     # ── Recycle Bin (all drives) ──────────────────────────────────────────────
     rb_paths, rb_total = [], 0
     try:
-        mask = ctypes.windll.kernel32.GetLogicalDrives()
-        for i in range(26):
-            if mask & (1 << i):
-                rb = chr(ord("A") + i) + r":\$Recycle.Bin"
-                sz = _dir_size(rb)
-                if sz > 0:
-                    rb_paths.append(rb)
-                    rb_total += sz
+        for root in _drive_roots():
+            rb = os.path.join(root, "$Recycle.Bin")
+            sz = _dir_size(rb)
+            if sz > 0:
+                rb_paths.append(rb)
+                rb_total += sz
     except Exception:
         pass
     cats["recycle_bin"] = {

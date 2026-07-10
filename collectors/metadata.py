@@ -6,16 +6,23 @@ extension/MIME hint.
 
 import os
 import datetime
-import ctypes
-import ctypes.wintypes
 from config import METADATA_FIELDS
 
 # ── Owner resolution via Win32 ────────────────────────────────────────────────
+# ctypes is imported defensively — _ctypes.pyd has failed to load on some
+# field machines, and owner lookup is a nice-to-have, not worth a crash.
+try:
+    import ctypes
+    import ctypes.wintypes
+    _advapi = ctypes.windll.advapi32
+except Exception:
+    _advapi = None
 
-_advapi = ctypes.windll.advapi32
 
 def _get_owner(path: str) -> str:
     """Return 'DOMAIN\\User' string for the file owner, or 'unknown'."""
+    if _advapi is None:
+        return "unknown"
     try:
         # GetFileSecurity flags: OWNER_SECURITY_INFORMATION = 0x1
         needed = ctypes.wintypes.DWORD(0)
